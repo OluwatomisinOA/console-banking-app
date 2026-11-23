@@ -15,6 +15,9 @@
 #define BAD_TYPE -4
 #define BAD_INDEX -5
 #define NAME_BUF_LEN 128
+#define LOAD_OK 0
+#define LOAD_NO_FILE 1
+#define LOAD_BAD_FILE 2
 
 typedef struct {
     char type[10];
@@ -155,33 +158,58 @@ void print_txn_status(int status) {
     }
 }
 
+// This function sets the account counts to zero, next id to start id and clears the array
+void reset_data(void) {
+    account_count = 0;
+    next_id = START_ID;
+    memset(accounts, 0, sizeof(accounts));
+}
+
 // This function loads the accounts from a file
 int load_accounts(void) {
     FILE *fp = fopen(DATA_FILE_NAME, "r");
     if (fp == NULL) {
-        return -1;
+        return LOAD_NO_FILE;
     }
 
-    if (fscanf(fp, "%d\n", &account_count) != 1) {
+    int count;
+    if ((fscanf(fp, "%d\n", &count) != 1) || count < 0 || count > MAX_ACCOUNTS) {
         fclose(fp);
-        return -1;
+        reset_data();
+        return LOAD_BAD_FILE;
     }
 
-    for (int i = 0; i < account_count; i++) {
-        fscanf(fp, "%d|%49[^|]|%ld|%d\n", &accounts[i].id, accounts[i].name, &accounts[i].balance, &accounts[i].txn_count);
+    for (int i = 0; i < count; i++) {
+        int acc_line = fscanf(fp, "%d|%49[^|]|%ld|%d\n", &accounts[i].id, accounts[i].name, &accounts[i].balance, &accounts[i].txn_count);
+        if (acc_line != 4) {
+            fclose(fp);
+            reset_data();
+            return LOAD_BAD_FILE;
+        }
         
+        if (accounts[i].txn_count < 0 || accounts[i].txn_count > MAX_TXNS) {
+            fclose(fp);
+            reset_data();
+            return LOAD_BAD_FILE;
+        }
+
         // Update next_id AFTER reading the account ID from the file
         if (accounts[i].id >= next_id) {
             next_id = accounts[i].id + 1;
         }
 
         for (int j = 0; j < accounts[i].txn_count; j++) {
-            fscanf(fp, "%9s %ld\n", accounts[i].history[j].type, &accounts[i].history[j].amount);
+            int txn_line = fscanf(fp, "%9s %ld\n", accounts[i].history[j].type, &accounts[i].history[j].amount);
+            if (txn_line != 2) {
+                fclose(fp);
+                reset_data();
+                return LOAD_BAD_FILE;
+            }
         }
     }
-
+    account_count = count;
     fclose(fp);
-    return 0;
+    return LOAD_OK;
 }
 
 // Helper to clear leftover characters like "\n" from the input buffer
