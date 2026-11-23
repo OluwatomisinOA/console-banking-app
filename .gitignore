@@ -1,8 +1,9 @@
-bank
-accounts.txtccounts.badfter.txt
+# Compiled binaries
 bank
 bank_asan
 old_bank
+
+# Generated runtime data
 accounts.txt
 accounts.bad
-bank
+after.txt
