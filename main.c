@@ -230,13 +230,17 @@ int main(void) {
         case LOAD_NO_FILE:
             printf("No saved accounts found. Initializing with dummy data.\n");
             add_dummy_data();
-            save_accounts();
+            if (save_accounts() != 0) {
+                printf("Warning: could not save changes");
+            }
             break;
         case LOAD_BAD_FILE:
             printf("Error loading accounts. Initializing with dummy data.\n");
             rename("accounts.txt", "accounts.bad");
             add_dummy_data();
-            save_accounts();
+            if (save_accounts() != 0) {
+                printf("Warning: could not save changes");
+            }
             break;
     }
 
@@ -259,7 +263,9 @@ int main(void) {
 
         int result = scanf("%d", &choice);
         if (result == EOF) {
-            save_accounts();
+            if (save_accounts() != 0) {
+                printf("Warning: could not save changes");
+            }
             printf("Data saved. Goodbye!\n");
             break;
         }
@@ -272,7 +278,9 @@ int main(void) {
         clear_input_buffer();
 
         if (choice == 6) {
-            save_accounts();
+            if (save_accounts() != 0) {
+                printf("Warning: could not save changes");
+            }
             printf("Data saved. Goodbye!\n");
             break;
         }
@@ -301,7 +309,9 @@ int main(void) {
                 if (new_idx == -1) {
                     printf("Error: Maximum account limit reached.\n");
                 } else {
-                    save_accounts();
+                    if (save_accounts() != 0) {
+                        printf("Warning: could not save changes");
+                    }
                     printf("Account created! Your Account ID is: %d\n", accounts[new_idx].id);
                 }
             }
@@ -344,7 +354,9 @@ int main(void) {
                 int status = apply_transaction(idx, "DEPOSIT", amount);
                 print_txn_status(status);
                 if (status == SUCCESS) {
-                    save_accounts();
+                    if (save_accounts() != 0) {
+                        printf("Warning: could not save changes");
+                    }
                     printf("New Balance: %ld\n", accounts[idx].balance);
                 }
 
@@ -362,7 +374,9 @@ int main(void) {
                 int status = apply_transaction(idx, "WITHDRAW", amount);
                 print_txn_status(status);
                 if (status == SUCCESS) {
-                    save_accounts();
+                    if (save_accounts() != 0) {
+                        printf("Warning: could not save changes");
+                    }
                     printf("New Balance: %ld\n", accounts[idx].balance);
                 }
 
