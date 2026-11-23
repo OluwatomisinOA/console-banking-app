@@ -213,9 +213,16 @@ int main(void) {
         printf("4. View History\n");
         printf("5. Create Account\n");
         printf("6. Exit\n");
-        printf("Choose an option: ");
+        printf("Choose an option: \n");
 
-        if (scanf("%d", &choice) != 1) {
+        int result = scanf("%d", &choice);
+        if (result == EOF) {
+            save_accounts();
+            printf("Data saved. Goodbye!\n");
+            break;
+        }
+
+        if (result != 1) {
             printf("Invalid input. Please enter a number.\n");
             clear_input_buffer();
             continue;
