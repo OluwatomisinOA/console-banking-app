@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define MAX_NAME_LEN 50
 #define MAX_TXNS 100
@@ -22,6 +23,7 @@
 typedef struct {
     char type[10];
     long amount;
+    char timestamp[25];
 } Transaction;
 
 typedef struct {
@@ -50,6 +52,15 @@ int add_transaction(int index, const char *type, long amount) {
     int slot = accounts[index].txn_count;
     snprintf(accounts[index].history[slot].type, sizeof(accounts[index].history[slot].type), "%s", type);
     accounts[index].history[slot].amount = amount;
+
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+    if (t != NULL) {
+        strftime(accounts[index].history[slot].timestamp, sizeof(accounts[index].history[slot].timestamp), "%Y-%m-%d %H:%M:%S", t);
+    } else {
+        snprintf(accounts[index].history[slot].timestamp, sizeof(accounts[index].history[slot].timestamp), "Unknown");
+    }
+
     accounts[index].txn_count++;
     return SUCCESS;
 }
@@ -136,7 +147,7 @@ int save_accounts(void) {
     for (int i = 0; i < account_count; i++) {
         fprintf(fp, "%d|%s|%ld|%d\n", accounts[i].id, accounts[i].name, accounts[i].balance, accounts[i].txn_count);
         for (int j = 0; j < accounts[i].txn_count; j++) {
-            fprintf(fp, "%s %ld\n", accounts[i].history[j].type, accounts[i].history[j].amount);
+            fprintf(fp, "%s|%ld|%s\n", accounts[i].history[j].type, accounts[i].history[j].amount, accounts[i].history[j].timestamp);
         }
     }
     fclose(fp);
@@ -199,8 +210,8 @@ int load_accounts(void) {
         }
 
         for (int j = 0; j < accounts[i].txn_count; j++) {
-            int txn_line = fscanf(fp, "%9s %ld\n", accounts[i].history[j].type, &accounts[i].history[j].amount);
-            if (txn_line != 2) {
+            int txn_line = fscanf(fp, "%9[^|]|%ld|%24[^\n]\n", accounts[i].history[j].type, &accounts[i].history[j].amount, accounts[i].history[j].timestamp);
+            if (txn_line != 3) {
                 fclose(fp);
                 reset_data();
                 return LOAD_BAD_FILE;
@@ -246,7 +257,7 @@ void show_history(int idx) {
         printf("No transactions yet.\n");
     } else {
         for (int j = 0; j < accounts[idx].txn_count; j++) {
-            printf("%d. %-8s | %ld\n", j + 1, accounts[idx].history[j].type, accounts[idx].history[j].amount);
+            printf("%d. [%-19s] %-8s | %ld\n", j + 1, accounts[idx].history[j].timestamp, accounts[idx].history[j].type, accounts[idx].history[j].amount);
         }
     }
 }
