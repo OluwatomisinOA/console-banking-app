@@ -19,6 +19,9 @@
 #define LOAD_OK 0
 #define LOAD_NO_FILE 1
 #define LOAD_BAD_FILE 2
+#define TEMP_FILE_NAME "accounts.tmp"
+#define BAD_FILE_NAME "accounts.bad"
+
 
 typedef struct {
     char type[10];
@@ -38,10 +41,10 @@ Account accounts[MAX_ACCOUNTS];
 int account_count = 0;
 int next_id = START_ID;
 
-// This function record one history line
+// This function records one history line
 int add_transaction(int index, const char *type, long amount) {
     // Checks if the index is valid
-    if (index < 0 || !(index < account_count)) {
+    if (index < 0 || index >= account_count) {
         return BAD_INDEX;
     }
     // Checks if the history is full
@@ -65,7 +68,7 @@ int add_transaction(int index, const char *type, long amount) {
     return SUCCESS;
 }
 
-// This function make a new account
+// This function makes a new account
 int create_account(const char *name) {
     // Checks if the accounts array is full
     if (account_count >= MAX_ACCOUNTS) {
@@ -92,30 +95,24 @@ int apply_transaction(int index, const char *type, long amount) {
     if (amount <= 0 || amount > MAX_AMT) {
         return BAD_AMT;
     }
-    // Checks if the transaction type is valid
-    if ((strcmp(type, "WITHDRAW") != 0) && (strcmp(type, "DEPOSIT") != 0)) {
-        return BAD_TYPE;
-    }
-    // Checks if there is room in the history
-    if (accounts[index].txn_count >= MAX_TXNS) {
-        return FULL_HISTORY;
-    }
+    
+    int is_withdraw = (strcmp(type, "WITHDRAW") == 0);
+    int is_deposit = (strcmp(type, "DEPOSIT") == 0);
+    if (!is_withdraw && !is_deposit) return BAD_TYPE;
+    if (is_withdraw && accounts[index].balance < amount) return INSUFF_FUNDS;
 
-    // Handle withdrawal vs deposit cleanly
-    if (strcmp(type, "WITHDRAW") == 0) {
-        if (accounts[index].balance < amount) {
-            return INSUFF_FUNDS;
-        }
+    int status = add_transaction(index, type, amount);
+    if (status != SUCCESS) return status;
+
+    if (is_withdraw) {
         accounts[index].balance -= amount;
     } else {
         accounts[index].balance += amount;
     }
-
-    add_transaction(index, type, amount);
     return SUCCESS;
 }
 
-// This function gives the sample accounts
+// This function creates sample accounts
 void add_dummy_data(void) {
     int acc1 = create_account("James White");
     apply_transaction(acc1, "DEPOSIT", 20000);
@@ -138,7 +135,7 @@ int find_account_index(int id) {
 
 // This function saves the accounts to a file
 int save_accounts(void) {
-    FILE *fp = fopen(DATA_FILE_NAME, "w");
+    FILE *fp = fopen(TEMP_FILE_NAME, "w");
     if (fp == NULL) {
         perror("fopen");
         return -1;
@@ -150,7 +147,20 @@ int save_accounts(void) {
             fprintf(fp, "%s|%ld|%s\n", accounts[i].history[j].type, accounts[i].history[j].amount, accounts[i].history[j].timestamp);
         }
     }
-    fclose(fp);
+
+    int write_failed = ferror(fp);
+    if (fclose(fp) != 0) {
+        write_failed = 1;
+    }
+    if (write_failed) {
+        remove(TEMP_FILE_NAME);
+        return -1;
+    }
+    if (rename(TEMP_FILE_NAME, DATA_FILE_NAME) != 0) {
+        perror("rename");
+        remove(TEMP_FILE_NAME);
+        return -1;
+    }
     return 0;
 }
 
@@ -176,6 +186,44 @@ void reset_data(void) {
     memset(accounts, 0, sizeof(accounts));
 }
 
+// Returns 1 if account at array position i is internally consistent, else 0
+int account_is_valid(int i) {
+    const Account *a = &accounts[i];
+
+    if (a->id < START_ID) {
+        return 0;
+    }
+    for (int k = 0; k < i; k++) {              // compare against earlier accounts only
+        if (accounts[k].id == a->id) {
+            return 0;                          // duplicate ID
+        }
+    }
+
+    long running = 0;
+    for (int j = 0; j < a->txn_count; j++) {
+        const Transaction *t = &a->history[j];
+        if (t->amount <= 0 || t->amount > MAX_AMT) {
+            return 0;
+        }
+        if (strcmp(t->type, "DEPOSIT") == 0) {
+            running += t->amount;
+        } else if (strcmp(t->type, "WITHDRAW") == 0) {
+            if (running < t->amount) {
+                return 0;                      
+            }
+            running -= t->amount;
+        } else {
+            return 0;                     
+        }
+    }
+    return running == a->balance;            
+}
+
+int fail_load(FILE *fp) {
+    fclose(fp);
+    reset_data();
+    return LOAD_BAD_FILE;
+}
 // This function loads the accounts from a file
 int load_accounts(void) {
     FILE *fp = fopen(DATA_FILE_NAME, "r");
@@ -185,44 +233,38 @@ int load_accounts(void) {
 
     int count;
     if ((fscanf(fp, "%d\n", &count) != 1) || count < 0 || count > MAX_ACCOUNTS) {
-        fclose(fp);
-        reset_data();
-        return LOAD_BAD_FILE;
+        return fail_load(fp);
     }
 
     for (int i = 0; i < count; i++) {
-        int acc_line = fscanf(fp, "%d|%49[^|]|%ld|%d\n", &accounts[i].id, accounts[i].name, &accounts[i].balance, &accounts[i].txn_count);
+        int acc_line = fscanf(fp, "%d|%49[^|]|%ld|%d\n", &accounts[i].id,
+                              accounts[i].name, &accounts[i].balance, &accounts[i].txn_count);
         if (acc_line != 4) {
-            fclose(fp);
-            reset_data();
-            return LOAD_BAD_FILE;
+            return fail_load(fp);
         }
-        
         if (accounts[i].txn_count < 0 || accounts[i].txn_count > MAX_TXNS) {
-            fclose(fp);
-            reset_data();
-            return LOAD_BAD_FILE;
-        }
-
-        // Update next_id AFTER reading the account ID from the file
-        if (accounts[i].id >= next_id) {
-            next_id = accounts[i].id + 1;
+            return fail_load(fp);
         }
 
         for (int j = 0; j < accounts[i].txn_count; j++) {
-            int txn_line = fscanf(fp, "%9[^|]|%ld|%24[^\n]\n", accounts[i].history[j].type, &accounts[i].history[j].amount, accounts[i].history[j].timestamp);
+            int txn_line = fscanf(fp, "%9[^|]|%ld|%24[^\n]\n", accounts[i].history[j].type,
+                                  &accounts[i].history[j].amount, accounts[i].history[j].timestamp);
             if (txn_line != 3) {
-                fclose(fp);
-                reset_data();
-                return LOAD_BAD_FILE;
+                return fail_load(fp);
             }
+        }
+
+        if (!account_is_valid(i)) {            
+            return fail_load(fp);
+        }
+        if (accounts[i].id >= next_id) {
+            next_id = accounts[i].id + 1;
         }
     }
     account_count = count;
     fclose(fp);
     return LOAD_OK;
 }
-
 // Helper to clear leftover characters like "\n" from the input buffer
 void clear_input_buffer(void) {
     int c;
@@ -243,7 +285,7 @@ void print_menu(void) {
     printf("4. View History\n");
     printf("5. Create Account\n");
     printf("6. Exit\n");
-    printf("Choose an option: \n");
+    printf("Choose an option: ");
 }
 
 void show_balance(int idx) {
@@ -330,13 +372,16 @@ void load_or_init(void) {
             printf("Accounts loaded successfully.\n");
             break;
         case LOAD_NO_FILE:
-            printf("No saved accounts found. Initializing with dummy data.\n");
+            printf("No saved accounts found! Initializing with dummy data...\n");
             add_dummy_data();
             save_or_warn();
             break;
         case LOAD_BAD_FILE:
-            printf("Error loading accounts. Initializing with dummy data.\n");
-            rename("accounts.txt", "accounts.bad");
+            printf("Error loading accounts! Initializing with dummy data...\n");
+            remove(BAD_FILE_NAME);
+            if (rename(DATA_FILE_NAME, BAD_FILE_NAME) != 0) {
+                perror("rename");
+            }
             add_dummy_data();
             save_or_warn();
             break;
