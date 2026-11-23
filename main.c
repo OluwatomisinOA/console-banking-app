@@ -13,6 +13,7 @@
 #define INSUFF_FUNDS -2
 #define FULL_HISTORY -3
 #define BAD_TYPE -4
+#define BAD_INDEX -5
 
 typedef struct {
     char type[10];
@@ -35,7 +36,7 @@ int next_id = START_ID;
 int add_transaction(int index, const char *type, long amount) {
     // Checks if the index is valid
     if (index < 0 || !(index < account_count)) {
-        return BAD_TYPE;
+        return BAD_INDEX;
     }
     // Checks if the history is full
     if (accounts[index].txn_count >= MAX_TXNS) {
@@ -70,7 +71,7 @@ int create_account(const char *name) {
 int apply_transaction(int index, const char *type, long amount) {
     // Check if the index is valid
     if (index < 0 || index >= account_count) {
-        return -1;
+        return BAD_INDEX;
     }
     // Check if the amount is valid
     if (amount <= 0 || amount > MAX_AMT) {
