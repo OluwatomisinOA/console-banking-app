@@ -218,10 +218,101 @@ void clear_input_buffer(void) {
     while ((c = getchar()) != '\n' && c != EOF);
 }
 
-// Main function to run the console banking app
-int main(void) {
-    printf("=== Welcome to the Console Banking App ===\n");
+void save_or_warn(void) {
+    if (save_accounts() != 0) {
+        printf("Warning: could not save changes\n");
+    }
+}
 
+void print_menu(void) {
+    printf("\n--- Menu ---\n");
+    printf("1. Check Balance\n");
+    printf("2. Deposit\n");
+    printf("3. Withdraw\n");
+    printf("4. View History\n");
+    printf("5. Create Account\n");
+    printf("6. Exit\n");
+    printf("Choose an option: \n");
+}
+
+void show_balance(int idx) {
+    printf("Account: %s (ID: %d)\n", accounts[idx].name, accounts[idx].id);
+    printf("Current Balance: %ld\n", accounts[idx].balance);
+}
+
+void show_history(int idx) {
+    printf("\nTransaction History for %s (ID: %d):\n", accounts[idx].name, accounts[idx].id);
+    if (accounts[idx].txn_count == 0) {
+        printf("No transactions yet.\n");
+    } else {
+        for (int j = 0; j < accounts[idx].txn_count; j++) {
+            printf("%d. %-8s | %ld\n", j + 1, accounts[idx].history[j].type, accounts[idx].history[j].amount);
+        }
+    }
+}
+
+void make_txn(int idx, const char *type) {
+    long amount;
+    printf("Enter amount to %s: ", type);
+    if (scanf("%ld", &amount) != 1) {
+        printf("Invalid amount.\n");
+        clear_input_buffer();
+        return;
+    }
+    clear_input_buffer();
+    int status = apply_transaction(idx, type, amount);
+    print_txn_status(status);
+    if (status == SUCCESS) {
+        save_or_warn();
+        printf("New Balance: %ld\n", accounts[idx].balance);
+    }
+}
+
+int ask_account(void) {
+    int id;
+    printf("Enter Account ID: ");
+    if (scanf("%d", &id) != 1) {
+        printf("Invalid Account ID.\n");
+        clear_input_buffer();
+        return -1;
+    }
+    clear_input_buffer();
+    int got_acc_idx = find_account_index(id);
+    if (got_acc_idx == -1) {printf("Error: Account ID %d not found.\n", id);}
+    return got_acc_idx;
+}
+
+void do_create_account(void) {
+    char name[NAME_BUF_LEN];
+    printf("Enter account holder name: ");
+    if (fgets(name, sizeof(name), stdin) != NULL) {
+        if (strchr(name, '\n') == NULL) {
+            clear_input_buffer();
+        }
+        name[strcspn(name, "\n")] = '\0';
+        if (strlen(name) == 0) {
+            printf("Name cannot be empty.\n");
+            return;
+        }
+        if (strlen(name) >= MAX_NAME_LEN) {
+            printf("Name too long!\n");
+            return;   
+        }
+        if (strchr(name, '|') != NULL) {
+            printf("Name cannot contain |\n");
+            return;
+        }
+        int new_idx = create_account(name);
+        if (new_idx == -1) {
+            printf("Error: Maximum account limit reached.\n");
+        } else {
+            save_or_warn();
+            printf("Account created! Your Account ID is: %d\n", accounts[new_idx].id);
+        }
+    }
+}
+
+void load_or_init(void) {
     // Load saved data or initialize dummy data if no file exists yet
     switch (load_accounts()) {
         case LOAD_OK:
@@ -230,171 +321,61 @@ int main(void) {
         case LOAD_NO_FILE:
             printf("No saved accounts found. Initializing with dummy data.\n");
             add_dummy_data();
-            if (save_accounts() != 0) {
-                printf("Warning: could not save changes");
-            }
+            save_or_warn();
             break;
         case LOAD_BAD_FILE:
             printf("Error loading accounts. Initializing with dummy data.\n");
             rename("accounts.txt", "accounts.bad");
             add_dummy_data();
-            if (save_accounts() != 0) {
-                printf("Warning: could not save changes");
-            }
+            save_or_warn();
             break;
     }
+}
 
+void print_accounts(void) {
     // Show loaded or dummy accounts immediately as stated in requirements
     printf("\n--- Active Accounts ---\n");
     for (int i = 0; i < account_count; i++) {
         printf("ID: %d | Name: %s | Balance: %ld\n", accounts[i].id, accounts[i].name, accounts[i].balance);
     }
+}
+
+// Main function to run the console banking app
+int main(void) {
+    printf("=== Welcome to the Console Banking App ===\n");
+    load_or_init();
+    print_accounts();
 
     int choice = 0;
     while (1) {
-        printf("\n--- Menu ---\n");
-        printf("1. Check Balance\n");
-        printf("2. Deposit\n");
-        printf("3. Withdraw\n");
-        printf("4. View History\n");
-        printf("5. Create Account\n");
-        printf("6. Exit\n");
-        printf("Choose an option: \n");
-
+        print_menu();
         int result = scanf("%d", &choice);
         if (result == EOF) {
-            if (save_accounts() != 0) {
-                printf("Warning: could not save changes");
-            }
-            printf("Data saved. Goodbye!\n");
+            save_or_warn();
+            printf("\nGoodbye!\n");
             break;
         }
-
         if (result != 1) {
             printf("Invalid input. Please enter a number.\n");
             clear_input_buffer();
             continue;
         }
-        clear_input_buffer();
 
-        if (choice == 6) {
-            if (save_accounts() != 0) {
-                printf("Warning: could not save changes");
-            }
-            printf("Data saved. Goodbye!\n");
-            break;
-        }
+        clear_input_buffer(); // clears the leftover \n after reading the number
 
-        if (choice == 5) {
-            char name[NAME_BUF_LEN];
-            printf("Enter account holder name: ");
-            if (fgets(name, sizeof(name), stdin) != NULL) {
-                if (strchr(name, '\n') == NULL) {
-                    clear_input_buffer();
-                }
-                name[strcspn(name, "\n")] = '\0';
-                if (strlen(name) == 0) {
-                    printf("Name cannot be empty.\n");
-                    continue;
-                }
-                if (strlen(name) >= MAX_NAME_LEN) {
-                    printf("Name too long!");
-                    continue;   
-                }
-                if (strchr(name, '|') != NULL) {
-                    printf("Name cannot contain |");
-                    continue;
-                }
-                int new_idx = create_account(name);
-                if (new_idx == -1) {
-                    printf("Error: Maximum account limit reached.\n");
-                } else {
-                    if (save_accounts() != 0) {
-                        printf("Warning: could not save changes");
-                    }
-                    printf("Account created! Your Account ID is: %d\n", accounts[new_idx].id);
-                }
-            }
-            continue;
-        }
+        if (choice == 6) { save_or_warn(); printf("Data saved. Goodbye!\n"); break; }
+        if (choice == 5) { do_create_account(); continue; }
+        if (choice < 1 || choice > 4) { printf("Invalid choice. Please select 1-6.\n"); continue; }
 
-        // Options 1 to 4 all require an account id first
-        if (choice >= 1 && choice <= 4) {
-            int id;
-            printf("Enter Account ID: ");
-            if (scanf("%d", &id) != 1) {
-                printf("Invalid Account ID.\n");
-                clear_input_buffer();
-                continue;
-            }
-            clear_input_buffer();
+        int idx = ask_account();
+        if (idx == -1) continue;
 
-            int idx = find_account_index(id);
-            if (idx == -1) {
-                printf("Error: Account ID %d not found.\n", id);
-                continue;
-            }
-
-            if (choice == 1) {
-                // Check balance
-                printf("Account: %s (ID: %d)\n", accounts[idx].name, accounts[idx].id);
-                printf("Current Balance: %ld\n", accounts[idx].balance);
-
-            } else if (choice == 2) {
-                // Deposit
-                long amount;
-                printf("Enter amount to deposit: ");
-                if (scanf("%ld", &amount) != 1) {
-                    printf("Invalid amount.\n");
-                    clear_input_buffer();
-                    continue;
-                }
-                clear_input_buffer();
-
-                int status = apply_transaction(idx, "DEPOSIT", amount);
-                print_txn_status(status);
-                if (status == SUCCESS) {
-                    if (save_accounts() != 0) {
-                        printf("Warning: could not save changes");
-                    }
-                    printf("New Balance: %ld\n", accounts[idx].balance);
-                }
-
-            } else if (choice == 3) {
-                // Withdraw
-                long amount;
-                printf("Enter amount to withdraw: ");
-                if (scanf("%ld", &amount) != 1) {
-                    printf("Invalid amount.\n");
-                    clear_input_buffer();
-                    continue;
-                }
-                clear_input_buffer();
-
-                int status = apply_transaction(idx, "WITHDRAW", amount);
-                print_txn_status(status);
-                if (status == SUCCESS) {
-                    if (save_accounts() != 0) {
-                        printf("Warning: could not save changes");
-                    }
-                    printf("New Balance: %ld\n", accounts[idx].balance);
-                }
-
-            } else if (choice == 4) {
-                // View history
-                printf("\nTransaction History for %s (ID: %d):\n", accounts[idx].name, accounts[idx].id);
-                if (accounts[idx].txn_count == 0) {
-                    printf("No transactions yet.\n");
-                } else {
-                    for (int j = 0; j < accounts[idx].txn_count; j++) {
-                        printf("%d. %-8s | %ld\n", j + 1, accounts[idx].history[j].type, accounts[idx].history[j].amount);
-                    }
-                }
-            }
-        } else {
-            printf("Invalid choice. Please select 1-6.\n");
+        switch (choice) {
+            case 1: show_balance(idx); break;
+            case 2: make_txn(idx, "DEPOSIT"); break;
+            case 3: make_txn(idx, "WITHDRAW"); break;
+            case 4: show_history(idx); break;
         }
     }
-
     return 0;
 }
