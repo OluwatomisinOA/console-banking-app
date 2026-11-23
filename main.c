@@ -223,9 +223,21 @@ int main(void) {
     printf("=== Welcome to the Console Banking App ===\n");
 
     // Load saved data or initialize dummy data if no file exists yet
-    if (load_accounts() != 0) {
-        add_dummy_data();
-        save_accounts();
+    switch (load_accounts()) {
+        case LOAD_OK:
+            printf("Accounts loaded successfully.\n");
+            break;
+        case LOAD_NO_FILE:
+            printf("No saved accounts found. Initializing with dummy data.\n");
+            add_dummy_data();
+            save_accounts();
+            break;
+        case LOAD_BAD_FILE:
+            printf("Error loading accounts. Initializing with dummy data.\n");
+            rename("accounts.txt", "accounts.bad");
+            add_dummy_data();
+            save_accounts();
+            break;
     }
 
     // Show loaded or dummy accounts immediately as stated in requirements
