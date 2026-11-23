@@ -14,6 +14,7 @@
 #define FULL_HISTORY -3
 #define BAD_TYPE -4
 #define BAD_INDEX -5
+#define NAME_BUF_LEN 128
 
 typedef struct {
     char type[10];
@@ -237,15 +238,25 @@ int main(void) {
         }
 
         if (choice == 5) {
-            char name[MAX_NAME_LEN];
+            char name[NAME_BUF_LEN];
             printf("Enter account holder name: ");
             if (fgets(name, sizeof(name), stdin) != NULL) {
+                if (strchr(name, '\n') == NULL) {
+                    clear_input_buffer();
+                }
                 name[strcspn(name, "\n")] = '\0';
                 if (strlen(name) == 0) {
-                    printf("Error: Name cannot be empty.\n");
+                    printf("Name cannot be empty.\n");
                     continue;
                 }
-
+                if (strlen(name) >= MAX_NAME_LEN) {
+                    printf("Name too long!");
+                    continue;   
+                }
+                if (strchr(name, '|') != NULL) {
+                    printf("Name cannot contain |");
+                    continue;
+                }
                 int new_idx = create_account(name);
                 if (new_idx == -1) {
                     printf("Error: Maximum account limit reached.\n");
