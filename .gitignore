@@ -1,10 +1,16 @@
-# Compiled binaries
+# build output
+*.o
+*.obj
+*.exe
 bank
-bank_asan
-old_bank
 
-# Generated runtime data
+# runtime data (never commit a live database)
+bank.db
+bank.db-journal
+bank.db-wal
+bank.db-shm
+
+# old text-file version leftovers
 accounts.txt
-accounts.bad
-after.txt
 accounts.tmp
+accounts.bad
