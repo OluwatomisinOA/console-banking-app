@@ -1,56 +1,47 @@
-# Console Banking App in C
+# Console Banking App
 
-A lightweight command-line banking application written in standard C featuring persistent file storage, transaction history tracking, and input validation.
+A menu-driven banking program in C. Accounts and transaction history are stored in a SQLite database (`bank.db`), so they are still there the next time you run it.
 
 ## Features
 
-* **Account Management:** Create new bank accounts with auto-incrementing Account IDs starting from `1001`.
-* **Core Transactions:** Perform deposits and withdrawals with balance, amount, and capacity validation.
-* **Balance & History:** Check real-time account balances and view itemized transaction histories (`DEPOSIT` / `WITHDRAW`).
-* **File Persistence:** Automatically saves all accounts and transaction logs to `accounts.txt` and reloads them on subsequent runs.
-* **Automatic Seeding:** Generates sample dummy accounts on first launch if `accounts.txt` does not exist yet.
+- Check balance, deposit, withdraw, view history, create account
+- Every transaction is recorded with a timestamp
+- Account IDs start at 1001
+- Amounts must be from 1 to 10,000,000; a withdrawal cannot exceed the balance; a name cannot be empty
+- A deposit or withdrawal updates the balance and writes its history record in one database transaction, so one cannot succeed without the other
+- On the first run, three sample accounts are created
 
-## Getting Started
+## Project layout
 
-### Prerequisites
-
-* A C compiler such as `gcc` or `clang`
-
-### Compilation & Execution
-
-1. Clone the repository:
-   ```bash
-   git clone <your-repo-url>
-   cd <your-repo-folder>
-   ```
-
-2. Compile the source code:
-   ```bash
-   gcc -Wall -Wextra -o banking_app main.c
-   ```
-
-3. Run the application:
-   ```bash
-   ./banking_app
-   ```
-
-## Usage
-
-Upon launch, the application displays all active accounts and presents the main menu:
-
-```text
---- Menu ---
-1. Balance
-2. Deposit
-3. Withdraw
-4. History
-5. Create Account
-6. Exit
+```
+src/main.c        menu and input handling only
+src/bank.c/.h     business rules (amount range, name checks)
+src/db.c/.h       the only file that uses SQLite: schema, queries, transactions
+src/status.h      result codes and callback types shared by all files
+third_party/sqlite/   SQLite 3.54.1 amalgamation (sqlite3.c, sqlite3.h)
 ```
 
-All changes made during a session are automatically saved to `accounts.txt` after every transaction or account creation.
+## Build
 
-## Project Structure
+SQLite is large, so compile it once and reuse the result.
 
-* `main.c` — Core application logic, data structures (`Account`, `Transaction`), file I/O, and CLI menu loop.
-* `accounts.txt` — Auto-generated flat-file database storing account details and transaction records.
+macOS / Linux / MinGW:
+
+```
+gcc -O2 -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION -c third_party/sqlite/sqlite3.c -o sqlite3.o
+gcc -std=c11 -Wall -Wextra -Wpedantic -Isrc -Ithird_party/sqlite src/main.c src/bank.c src/db.c sqlite3.o -o bank
+```
+
+Windows (Visual Studio Developer Command Prompt):
+
+```
+cl /O2 /DSQLITE_THREADSAFE=0 /DSQLITE_OMIT_LOAD_EXTENSION /Isrc /Ithird_party\sqlite src\main.c src\bank.c src\db.c third_party\sqlite\sqlite3.c /Fe:bank.exe
+```
+
+## Run
+
+```
+./bank          (Windows: bank.exe)
+```
+
+Run it from the project folder. `bank.db` is created in the current directory on the first run. Delete `bank.db` to start again with fresh sample data.
